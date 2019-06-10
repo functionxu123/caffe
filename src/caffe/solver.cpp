@@ -75,8 +75,8 @@ void LoadNetWeights(shared_ptr<Net<Dtype> > net,
 }
 
 template <typename Dtype>
-void Solver<Dtype>::InitTrainNet() {
-  const int num_train_nets = param_.has_net() + param_.has_net_param() +
+void Solver<Dtype>::InitTrainNet() {//SolverParameter param_;
+  const int num_train_nets = param_.has_net() + param_.has_net_param() +   
       param_.has_train_net() + param_.has_train_net_param();
   const string field_names = "net, net_param, train_net, train_net_param";
   CHECK_GE(num_train_nets, 1) << "SolverParameter must specify a train net "
@@ -301,6 +301,8 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // should be given, and we will just provide dummy vecs.
   int start_iter = iter_;
   Step(param_.max_iter() - iter_);
+  //arriving here means it's finished training
+
   // If we haven't already, save a snapshot after optimization, unless
   // overridden by setting snapshot_after_train := false
   if (param_.snapshot_after_train()

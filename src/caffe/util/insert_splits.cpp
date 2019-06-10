@@ -51,6 +51,8 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
       }
     }
   }
+  //到这里主要完成了统计各个层的信息，将bottom与top对应，会有一个top对多个bottom的情况，这时一个top一个blob已经不好了，需要对应每个bottom添加blob
+
   for (int i = 0; i < param.layer_size(); ++i) {
     LayerParameter* layer_param = param_split->add_layer();
     layer_param->CopyFrom(param.layer(i));
@@ -59,7 +61,8 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
       const pair<int, int>& top_idx =
           bottom_idx_to_source_top_idx[make_pair(i, j)];
       const int split_count = top_idx_to_bottom_count[top_idx];
-      if (split_count > 1) {
+      if (split_count > 1) {//对每一个bottom，如果其对应的top对应多个bottom，就改该bottom的名字为 
+        //【top的layer name，该bottom的blob name，top在其层中是第几个top，该bottom是top的第几个连接】
         const string& layer_name = layer_idx_to_layer_name[top_idx.first];
         const string& blob_name = layer_param->bottom(j);
         layer_param->set_bottom(j, SplitBlobName(layer_name,
@@ -68,6 +71,7 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
     }
     // Create split layer for any top blobs used by other layer as bottom
     // blobs more than once.
+    //若一个top连多个bottom，就在其上加一层，layer.type为split，layer.bottom为该top，layer.top为该top对应的多个bottom
     for (int j = 0; j < layer_param->top_size(); ++j) {
       const pair<int, int>& top_idx = make_pair(i, j);
       const int split_count = top_idx_to_bottom_count[top_idx];

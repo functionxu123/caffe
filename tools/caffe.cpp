@@ -173,6 +173,7 @@ int train() {
   caffe::SolverParameter solver_param;
   caffe::ReadSolverParamsFromTextFileOrDie(FLAGS_solver, &solver_param);
 
+  //mutable_** 该函数返回指向该字段的一个指针。同时将该字段置为被设置状态。若该对象存在，则直接返回该对象，若不存在则新new 一个
   solver_param.mutable_train_state()->set_level(FLAGS_level);
   for (int i = 0; i < stages.size(); i++) {
     solver_param.mutable_train_state()->add_stage(stages[i]);
