@@ -56,10 +56,23 @@ DEFINE_string(sighup_effect, "snapshot",
              "snapshot, stop or none.");
 
 // A simple registry for caffe commands.
+//定义了一个BrewFunction类型
 typedef int (*BrewFunction)();
+//定义了一个存储string：BrewFunction的map类型
 typedef std::map<caffe::string, BrewFunction> BrewMap;
+//实例化
 BrewMap g_brew_map;
 
+/**
+ * @description: 宏定义，用于注册caffe中的工具函数，该宏用于将  函数名与函数体的对应关系保存到map中
+ * 这里思考一个问题，为什么不用 #define RegisterBrewFunction(func) g_brew_map[#func]=&func; 
+ * 
+ * 
+ * https://stackoverflow.com/questions/27690125/caffe-cpp-registerbrewfunction
+ * ！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！解释是如果用上面那样方式，只能在函数中调用，而不能在函数外任意位置用（file scope），而该注册过程要在main函数调用之前完成
+ * @param {type} 
+ * @return: 
+ */
 #define RegisterBrewFunction(func) \
 namespace { \
 class __Registerer_##func { \
@@ -71,6 +84,12 @@ class __Registerer_##func { \
 __Registerer_##func g_registerer_##func; \
 }
 
+
+/**
+ * @description: 由传进来的命令行参数调用相应函数
+ * @param {type} 
+ * @return: 
+ */
 static BrewFunction GetBrewFunction(const caffe::string& name) {
   if (g_brew_map.count(name)) {
     return g_brew_map[name];
@@ -144,6 +163,7 @@ int device_query() {
   }
   return 0;
 }
+//注册一个brew 函数
 RegisterBrewFunction(device_query);
 
 // Translate the signal effect the user specified on the command-line to the
@@ -164,17 +184,21 @@ caffe::SolverAction::Enum GetRequestedAction(
 
 // Train / Finetune a model.
 int train() {
+  //没定义solver就报错
   CHECK_GT(FLAGS_solver.size(), 0) << "Need a solver definition to train.";
+  //不能同时定义snapshot和weights
   CHECK(!FLAGS_snapshot.size() || !FLAGS_weights.size())
       << "Give a snapshot to resume training or weights to finetune "
       "but not both.";
   vector<string> stages = get_stages_from_flags();
 
+  //SolverParameter是proto中定义的一个结构名称，其内部成员对应我们提供的solver中的参数，参见src/caffe/proto中
   caffe::SolverParameter solver_param;
+  //将提供的solver中的参数读进来
   caffe::ReadSolverParamsFromTextFileOrDie(FLAGS_solver, &solver_param);
 
   //mutable_** 该函数返回指向该字段的一个指针。同时将该字段置为被设置状态。若该对象存在，则直接返回该对象，若不存在则新new 一个
-  solver_param.mutable_train_state()->set_level(FLAGS_level);
+  solver_param.mutable_train_state()->set_level(FLAGS_level);//这里level应该是一个等级机制，高于设定level的层才会被用上
   for (int i = 0; i < stages.size(); i++) {
     solver_param.mutable_train_state()->add_stage(stages[i]);
   }
@@ -251,6 +275,7 @@ int train() {
   LOG(INFO) << "Optimization Done.";
   return 0;
 }
+//注册一个brew 函数
 RegisterBrewFunction(train);
 
 
@@ -324,6 +349,7 @@ int test() {
 
   return 0;
 }
+//注册一个brew 函数
 RegisterBrewFunction(test);
 
 
@@ -416,8 +442,14 @@ int time() {
   LOG(INFO) << "*** Benchmark ends ***";
   return 0;
 }
+//注册一个brew 函数
 RegisterBrewFunction(time);
 
+/**
+ * @description: 根据命令行中的第一个参数调用其相应函数
+ * @param {type} 
+ * @return: 
+ */
 int main(int argc, char** argv) {
   // Print output to stderr (while still logging).
   FLAGS_alsologtostderr = 1;
@@ -437,6 +469,7 @@ int main(int argc, char** argv) {
 #ifdef WITH_PYTHON_LAYER
     try {
 #endif
+      //根据string返回对应的函数，并调用
       return GetBrewFunction(caffe::string(argv[1]))();
 #ifdef WITH_PYTHON_LAYER
     } catch (bp::error_already_set) {
