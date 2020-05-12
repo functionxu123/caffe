@@ -244,6 +244,8 @@ int train() {
         GetRequestedAction(FLAGS_sigint_effect),
         GetRequestedAction(FLAGS_sighup_effect));
 
+  //如果有snapshot参数，就以snapshot为主，就不管weight参数
+  //如果命令行中也有weight参数，那就以命令行中的为主
   if (FLAGS_snapshot.size()) {
     solver_param.clear_weights();
   } else if (FLAGS_weights.size()) {
@@ -251,12 +253,13 @@ int train() {
     solver_param.add_weights(FLAGS_weights);
   }
 
+  //重点函数，根据solver中的参数构建solver
   shared_ptr<caffe::Solver<float> >
       solver(caffe::SolverRegistry<float>::CreateSolver(solver_param));
 
   solver->SetActionFunction(signal_handler.GetActionFunction());
 
-  if (FLAGS_snapshot.size()) {
+  if (FLAGS_snapshot.size()) {//加载权重什么的
     LOG(INFO) << "Resuming from " << FLAGS_snapshot;
     solver->Restore(FLAGS_snapshot.c_str());
   }
@@ -270,6 +273,8 @@ int train() {
     LOG(FATAL) << "Multi-GPU execution not available - rebuild with USE_NCCL";
 #endif
   } else {
+    //开始训练了
+    //可见代码的重点就在solver的构建过程，和下面这个Solve();函数中
     solver->Solve();
   }
   LOG(INFO) << "Optimization Done.";

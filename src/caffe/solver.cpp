@@ -51,6 +51,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
     Caffe::set_random_seed(param_.random_seed() + Caffe::solver_rank());
   }
   // Scaffolding code
+  //主要的网络构建就在这里，分别在构造函数中构建train和test
   InitTrainNet();
   InitTestNets();
   if (Caffe::root_solver()) {

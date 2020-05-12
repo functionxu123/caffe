@@ -57,7 +57,7 @@ class SolverRegistry {
   typedef std::map<string, Creator> CreatorRegistry;
 
   static CreatorRegistry& Registry() {
-    static CreatorRegistry* g_registry_ = new CreatorRegistry();
+    static CreatorRegistry* g_registry_ = new CreatorRegistry();//注意这里用了一个静态变量去保存如  key：sgd  value：Creator这样的map
     return *g_registry_;
   }
 
@@ -71,7 +71,7 @@ class SolverRegistry {
 
   // Get a solver using a SolverParameter.
   static Solver<Dtype>* CreateSolver(const SolverParameter& param) {
-    const string& type = param.type();
+    const string& type = param.type();//SGD什么的
     CreatorRegistry& registry = Registry();
     CHECK_EQ(registry.count(type), 1) << "Unknown solver type: " << type
         << " (known types: " << SolverTypeListString() << ")";
