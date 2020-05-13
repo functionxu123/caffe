@@ -245,7 +245,7 @@ int train() {
         GetRequestedAction(FLAGS_sighup_effect));
 
   //如果有snapshot参数，就以snapshot为主，就不管weight参数
-  //如果命令行中也有weight参数，那就以命令行中的为主
+  //如果命令行中也有weight参数，那就以命令行中的为主,这里只是保存weight参数，并不加载权重
   if (FLAGS_snapshot.size()) {
     solver_param.clear_weights();
   } else if (FLAGS_weights.size()) {
@@ -256,6 +256,7 @@ int train() {
   //重点函数，根据solver中的参数构建solver
   shared_ptr<caffe::Solver<float> >
       solver(caffe::SolverRegistry<float>::CreateSolver(solver_param));
+      //CreateSolver相当于调用new SGDSolver(), 这里用shared_ptr solver对象托管该指针
 
   solver->SetActionFunction(signal_handler.GetActionFunction());
 
