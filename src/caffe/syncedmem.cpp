@@ -23,7 +23,7 @@ SyncedMemory::SyncedMemory(size_t size)
 #endif
 }
 
-SyncedMemory::~SyncedMemory() {
+SyncedMemory::~SyncedMemory() {//这里注意释放内存
   check_device();
   if (cpu_ptr_ && own_cpu_data_) {
     CaffeFreeHost(cpu_ptr_, cpu_malloc_use_cuda_);
@@ -36,7 +36,7 @@ SyncedMemory::~SyncedMemory() {
 #endif  // CPU_ONLY
 }
 
-inline void SyncedMemory::to_cpu() {
+inline void SyncedMemory::to_cpu() {//根据数据位置不同，将数据放到cpu上
   check_device();
   switch (head_) {
   case UNINITIALIZED:
@@ -63,7 +63,7 @@ inline void SyncedMemory::to_cpu() {
   }
 }
 
-inline void SyncedMemory::to_gpu() {
+inline void SyncedMemory::to_gpu() {//根据数据位置不同，将数据放到gpu上
   check_device();
 #ifndef CPU_ONLY
   switch (head_) {
@@ -90,7 +90,7 @@ inline void SyncedMemory::to_gpu() {
 #endif
 }
 
-const void* SyncedMemory::cpu_data() {
+const void* SyncedMemory::cpu_data() {//将数据放到cpu上然后返回指针
   check_device();
   to_cpu();
   return (const void*)cpu_ptr_;
@@ -107,7 +107,7 @@ void SyncedMemory::set_cpu_data(void* data) {
   own_cpu_data_ = false;
 }
 
-const void* SyncedMemory::gpu_data() {
+const void* SyncedMemory::gpu_data() {//将数据放到gpu上然后返回指针
   check_device();
 #ifndef CPU_ONLY
   to_gpu();
@@ -134,13 +134,15 @@ void SyncedMemory::set_gpu_data(void* data) {
 }
 
 void* SyncedMemory::mutable_cpu_data() {
+//这里先将数据同步到cpu上，让数据同步，然后让头指针由SYNCED变为HEAD_AT_CPU，这样当下次gpu需要数据时要从cpu中取
+//这一般用于获取cpu数据指针并准备向cpu上写数据的时候用，标识cpu上的数据是最新的
   check_device();
   to_cpu();
   head_ = HEAD_AT_CPU;
   return cpu_ptr_;
 }
 
-void* SyncedMemory::mutable_gpu_data() {
+void* SyncedMemory::mutable_gpu_data() {//同理同上
   check_device();
 #ifndef CPU_ONLY
   to_gpu();

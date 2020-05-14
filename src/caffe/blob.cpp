@@ -24,7 +24,7 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
   CHECK_LE(shape.size(), kMaxBlobAxes);
   count_ = 1;
   shape_.resize(shape.size());
-  if (!shape_data_ || shape_data_->size() < shape.size() * sizeof(int)) {
+  if (!shape_data_ || shape_data_->size() < shape.size() * sizeof(int)) {//如果以前没有shape信息，那就新建一个
     shape_data_.reset(new SyncedMemory(shape.size() * sizeof(int)));
   }
   int* shape_data = static_cast<int*>(shape_data_->mutable_cpu_data());
@@ -37,7 +37,7 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     shape_[i] = shape[i];
     shape_data[i] = shape[i];
   }
-  if (count_ > capacity_) {
+  if (count_ > capacity_) {//如果当前目标shape大于当前的数据容量，需要重新分配内存
     capacity_ = count_;
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
@@ -171,7 +171,8 @@ template <> void Blob<unsigned int>::Update() { NOT_IMPLEMENTED; }
 template <> void Blob<int>::Update() { NOT_IMPLEMENTED; }
 
 template <typename Dtype>
-void Blob<Dtype>::Update() {
+void Blob<Dtype>::Update() {//cblas_saxpy(N, alpha, X, incX, Y, incY) --> Y[i]=alpha*X[i]+Y[i]  every incX and incY for N times
+  //可见这里就是data_ = data_ - diff_
   // We will perform update based on where the data is located.
   switch (data_->head()) {
   case SyncedMemory::HEAD_AT_CPU:
