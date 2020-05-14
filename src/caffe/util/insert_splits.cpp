@@ -19,20 +19,20 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
   map<pair<int, int>, float> top_idx_to_loss_weight;
   map<pair<int, int>, int> top_idx_to_bottom_split_idx;
   map<int, string> layer_idx_to_layer_name;
-  for (int i = 0; i < param.layer_size(); ++i) {
+  for (int i = 0; i < param.layer_size(); ++i) {//遍历一个layer
     const LayerParameter& layer_param = param.layer(i);
-    layer_idx_to_layer_name[i] = layer_param.name();
-    for (int j = 0; j < layer_param.bottom_size(); ++j) {
-      const string& blob_name = layer_param.bottom(j);
+    layer_idx_to_layer_name[i] = layer_param.name();//将  index：name  映射保存到layer_idx_to_layer_name map中
+    for (int j = 0; j < layer_param.bottom_size(); ++j) {//遍历该layer中的bottom，每个layer中都可以定义多个top和bottom
+      const string& blob_name = layer_param.bottom(j);//取一个bottom的name，注意每个bottom对应一个blob
       if (blob_name_to_last_top_idx.find(blob_name) ==
-          blob_name_to_last_top_idx.end()) {
+          blob_name_to_last_top_idx.end()) {//如果这个bottom没有对应的top供应数据，报错
         LOG(FATAL) << "Unknown bottom blob '" << blob_name << "' (layer '"
                    << layer_param.name() << "', bottom index " << j << ")";
       }
-      const pair<int, int>& bottom_idx = make_pair(i, j);
-      const pair<int, int>& top_idx = blob_name_to_last_top_idx[blob_name];
-      bottom_idx_to_source_top_idx[bottom_idx] = top_idx;
-      ++top_idx_to_bottom_count[top_idx];
+      const pair<int, int>& bottom_idx = make_pair(i, j);//第i层 第j个bottom
+      const pair<int, int>& top_idx = blob_name_to_last_top_idx[blob_name];//找到对应的哪一层的哪个top，注意这里返回的是个pair<int, int>
+      bottom_idx_to_source_top_idx[bottom_idx] = top_idx;//将  pair映射到pair， 也即哪一层的哪个bottom对应到哪一层的哪个top
+      ++top_idx_to_bottom_count[top_idx];//记录下该top对应的bottom数量
     }
     for (int j = 0; j < layer_param.top_size(); ++j) {
       const string& blob_name = layer_param.top(j);

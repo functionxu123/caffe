@@ -88,11 +88,11 @@ void Solver<Dtype>::InitTrainNet() {//SolverParameter param_;
   if (param_.has_train_net_param()) {
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating training net specified in train_net_param.";
-    net_param.CopyFrom(param_.train_net_param());
+    net_param.CopyFrom(param_.train_net_param());//这里应该是一种不常见的初始化方式，这里初始化通过一个proto格式的文件
   } else if (param_.has_train_net()) {
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating training net from train_net file: " << param_.train_net();
-    ReadNetParamsFromTextFileOrDie(param_.train_net(), &net_param);
+    ReadNetParamsFromTextFileOrDie(param_.train_net(), &net_param);//这里是通过读取protoxt文件来初始化网络结构
   }
   if (param_.has_net_param()) {
     LOG_IF(INFO, Caffe::root_solver())
@@ -108,12 +108,15 @@ void Solver<Dtype>::InitTrainNet() {//SolverParameter param_;
   // precedence); then, merge in any NetState specified by the net_param itself;
   // finally, merge in any NetState specified by the train_state (highest
   // precedence).
+  //先不用管这里的netstate构建，我们主要关注网络的构建
   NetState net_state;
   net_state.set_phase(TRAIN);
   net_state.MergeFrom(net_param.state());
   net_state.MergeFrom(param_.train_state());
   net_param.mutable_state()->CopyFrom(net_state);
+  //这里注意，在Net类的构造函数中通过读取的layers这些参数构造网络！！！！！！！！！！！
   net_.reset(new Net<Dtype>(net_param));
+  //加载权重，这里可以指定多个weight参数，会逐个加载其中的权重到网络中对应名字layer中
   for (int w_idx = 0; w_idx < param_.weights_size(); ++w_idx) {
     LoadNetWeights(net_, param_.weights(w_idx));
   }

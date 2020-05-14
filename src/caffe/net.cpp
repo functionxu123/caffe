@@ -49,7 +49,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   // Filter layers based on their include/exclude rules and
   // the current NetState.
   NetParameter filtered_param;
-  FilterNet(in_param, &filtered_param);
+  FilterNet(in_param, &filtered_param);//将符合条件的layers加到filtered_param中
   LOG_IF(INFO, Caffe::root_solver())
       << "Initializing net from parameters: " << std::endl
       << filtered_param.DebugString();
@@ -259,10 +259,11 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
 
 template <typename Dtype>
 void Net<Dtype>::FilterNet(const NetParameter& param,
-    NetParameter* param_filtered) {
+    NetParameter* param_filtered) {//将符合当前训练设定的layers加到param_filtered中
   NetState net_state(param.state());
   param_filtered->CopyFrom(param);
   param_filtered->clear_layer();
+  //除了layers之外都复制
   for (int i = 0; i < param.layer_size(); ++i) {
     const LayerParameter& layer_param = param.layer(i);
     const string& layer_name = layer_param.name();
@@ -281,7 +282,7 @@ void Net<Dtype>::FilterNet(const NetParameter& param,
         layer_included = true;
       }
     }
-    if (layer_included) {
+    if (layer_included) {//如果该层符合stage等规则，就加进去
       param_filtered->add_layer()->CopyFrom(layer_param);
     }
   }
@@ -289,7 +290,7 @@ void Net<Dtype>::FilterNet(const NetParameter& param,
 
 template <typename Dtype>
 bool Net<Dtype>::StateMeetsRule(const NetState& state,
-    const NetStateRule& rule, const string& layer_name) {
+    const NetStateRule& rule, const string& layer_name) {//判断rule的level是否符合当前训练设定，还有stage什么的，如果符合规则就返回true，表示该层可以在加到网络中
   // Check whether the rule is broken due to phase.
   if (rule.has_phase()) {
       if (rule.phase() != state.phase()) {
