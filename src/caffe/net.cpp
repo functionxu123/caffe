@@ -55,32 +55,34 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       << filtered_param.DebugString();
   // Create a copy of filtered_param with splits added where necessary.
   NetParameter param;
-  InsertSplits(filtered_param, &param);
+  InsertSplits(filtered_param, &param);//注释详见该函数，这里执行后param中就是真正要构建网络的layers
   // Basically, build all the layers and set up their connections.
   name_ = param.name();
   map<string, int> blob_name_to_idx;
   set<string> available_blobs;
   memory_used_ = 0;
   // For each layer, set up its input and output
-  bottom_vecs_.resize(param.layer_size());
-  top_vecs_.resize(param.layer_size());
+  bottom_vecs_.resize(param.layer_size());//其为二维vector，其中每个vector中存放每个layer中的bottom的blob指针
+  top_vecs_.resize(param.layer_size());//类似上面
   bottom_id_vecs_.resize(param.layer_size());
   param_id_vecs_.resize(param.layer_size());
   top_id_vecs_.resize(param.layer_size());
-  bottom_need_backward_.resize(param.layer_size());
-  for (int layer_id = 0; layer_id < param.layer_size(); ++layer_id) {
+  bottom_need_backward_.resize(param.layer_size());//二维vector，该bottom是否需要bp
+  for (int layer_id = 0; layer_id < param.layer_size(); ++layer_id) {//遍历layer
     // Inherit phase from net if unset.
-    if (!param.layer(layer_id).has_phase()) {
+    if (!param.layer(layer_id).has_phase()) {//如果没有指定train/test的话就指定全局的
       param.mutable_layer(layer_id)->set_phase(phase_);
     }
     // Setup layer.
     const LayerParameter& layer_param = param.layer(layer_id);
-    if (layer_param.propagate_down_size() > 0) {
+    if (layer_param.propagate_down_size() > 0) {//这里判断propagate_down layer参数，不是很熟这个参数
       CHECK_EQ(layer_param.propagate_down_size(),
           layer_param.bottom_size())
           << "propagate_down param must be specified "
           << "either 0 or bottom_size times ";
     }
+    //注意这里又是一个工厂模式，通过layer参数构建一个层，就不细看了，就是LayerRegistry<Dtype>::CreateLayer(layer_param)=new一个该layer的type名字+Layer  命名的对象
+    //比如 type: "Pooling"  就对应  caffe/src/caffe/layers/pooling_layer.cpp中的layer类PoolingLayer
     layers_.push_back(LayerRegistry<Dtype>::CreateLayer(layer_param));
     layer_names_.push_back(layer_param.name());
     LOG_IF(INFO, Caffe::root_solver())
@@ -90,6 +92,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     // Figure out this layer's input and output
     for (int bottom_id = 0; bottom_id < layer_param.bottom_size();
          ++bottom_id) {
+      //bottom与blob对应，这里blob在top那里分配
       const int blob_id = AppendBottom(param, layer_id, bottom_id,
                                        &available_blobs, &blob_name_to_idx);
       // If a blob needs backward, this layer should provide it.
@@ -97,6 +100,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     }
     int num_top = layer_param.top_size();
     for (int top_id = 0; top_id < num_top; ++top_id) {
+      //
       AppendTop(param, layer_id, top_id, &available_blobs, &blob_name_to_idx);
       // Collect Input layer tops as Net inputs.
       if (layer_param.type() == "Input") {
@@ -108,6 +112,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     // If the layer specifies that AutoTopBlobs() -> true and the LayerParameter
     // specified fewer than the required number (as specified by
     // ExactNumTopBlobs() or MinTopBlobs()), allocate them here.
+    //有些层是有一些固定的top数目的，比如pooling要求输入数目一定是1，当指定的top数目小于要求的数目时候这里会分配
     Layer<Dtype>* layer = layers_[layer_id].get();
     if (layer->AutoTopBlobs()) {
       const int needed_num_top =
@@ -120,6 +125,8 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       }
     }
     // After this layer is connected, set it up.
+    //能到这里，说明该layer的top与bottom都对应好了，blob也准备好了，可以调用该layer中的setup类函数初始化该layer的功能了
+    //setup中主要调用LayerSetUp(bottom, top); 和    Reshape(bottom, top);这两个函数由各个layer类自行实现，进行各自的功能
     layers_[layer_id]->SetUp(bottom_vecs_[layer_id], top_vecs_[layer_id]);
     LOG_IF(INFO, Caffe::root_solver())
         << "Setting up " << layer_names_[layer_id];
@@ -127,7 +134,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       if (blob_loss_weights_.size() <= top_id_vecs_[layer_id][top_id]) {
         blob_loss_weights_.resize(top_id_vecs_[layer_id][top_id] + 1, Dtype(0));
       }
-      blob_loss_weights_[top_id_vecs_[layer_id][top_id]] = layer->loss(top_id);
+      blob_loss_weights_[top_id_vecs_[layer_id][top_id]] = layer->loss(top_id);//这里处理设定的loss_weight，即将top上的loss乘以多少
       LOG_IF(INFO, Caffe::root_solver())
           << "Top shape: " << top_vecs_[layer_id][top_id]->shape_string();
       if (layer->loss(top_id)) {
@@ -139,7 +146,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     LOG_IF(INFO, Caffe::root_solver())
         << "Memory required for data: " << memory_used_ * sizeof(Dtype);
     const int param_size = layer_param.param_size();
-    const int num_param_blobs = layers_[layer_id]->blobs().size();
+    const int num_param_blobs = layers_[layer_id]->blobs().size();   //layer.blobs() -> return blobs_;
     CHECK_LE(param_size, num_param_blobs)
         << "Too many params specified for layer " << layer_param.name();
     ParamSpec default_param_spec;
@@ -168,6 +175,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   // Also checks if all bottom blobs don't need backward computation (possible
   // because the skip_propagate_down param) and so we can skip backward
   // computation for the entire layer
+  //判断该层是否跳过bp阶段，这里可以先不看
   set<string> blobs_under_loss;
   set<string> blobs_skip_backp;
   for (int layer_id = layers_.size() - 1; layer_id >= 0; --layer_id) {
@@ -239,6 +247,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     }
   }
   // In the end, all remaining blobs are considered output blobs.
+  //最后所有剩下的没有认领的blobs都被看作输出层
   for (set<string>::iterator it = available_blobs.begin();
       it != available_blobs.end(); ++it) {
     LOG_IF(INFO, Caffe::root_solver())
@@ -365,14 +374,16 @@ void Net<Dtype>::AppendTop(const NetParameter& param, const int layer_id,
       layer_param->top(top_id) : "(automatic)";
   // Check if we are doing in-place computation
   if (blob_name_to_idx && layer_param->bottom_size() > top_id &&
-      blob_name == layer_param->bottom(top_id)) {
+      blob_name == layer_param->bottom(top_id)) {//如果该top同本层的对应位置的bottom的名字一样，那就是in-place computation不用再分配Blob
     // In-place computation
     LOG_IF(INFO, Caffe::root_solver())
         << layer_param->name() << " -> " << blob_name << " (in-place)";
+
+    //记录一下该top对应的blob 指针，top_vecs_ 是重要变量，其记录着每层的top指向哪个blob，也即算出来的数据放到哪个blob，而该算出来的数据又作为另一个bottom的数据来源
     top_vecs_[layer_id].push_back(blobs_[(*blob_name_to_idx)[blob_name]].get());
     top_id_vecs_[layer_id].push_back((*blob_name_to_idx)[blob_name]);
   } else if (blob_name_to_idx &&
-             blob_name_to_idx->find(blob_name) != blob_name_to_idx->end()) {
+             blob_name_to_idx->find(blob_name) != blob_name_to_idx->end()) {//这个blob名字已经有了，也即有其他层使用了相同的top名称
     // If we are not doing in-place computation but have duplicated blobs,
     // raise an error.
     LOG(FATAL) << "Top blob '" << blob_name
@@ -382,16 +393,17 @@ void Net<Dtype>::AppendTop(const NetParameter& param, const int layer_id,
     if (Caffe::root_solver()) {
       LOG(INFO) << layer_param->name() << " -> " << blob_name;
     }
+    //注意这里分配了Blob，并初始化该blob
     shared_ptr<Blob<Dtype> > blob_pointer(new Blob<Dtype>());
     const int blob_id = blobs_.size();
     blobs_.push_back(blob_pointer);
     blob_names_.push_back(blob_name);
-    blob_need_backward_.push_back(false);
+    blob_need_backward_.push_back(false);//一开始都认为该blob是不用bp的
     if (blob_name_to_idx) { (*blob_name_to_idx)[blob_name] = blob_id; }
     top_id_vecs_[layer_id].push_back(blob_id);
     top_vecs_[layer_id].push_back(blob_pointer.get());
   }
-  if (available_blobs) { available_blobs->insert(blob_name); }
+  if (available_blobs) { available_blobs->insert(blob_name); }//将该blob放到available_blobs中，等待bottom认领
 }
 
 // Helper for Net::Init: add a new bottom blob to the net.
@@ -401,19 +413,21 @@ int Net<Dtype>::AppendBottom(const NetParameter& param, const int layer_id,
     map<string, int>* blob_name_to_idx) {
   const LayerParameter& layer_param = param.layer(layer_id);
   const string& blob_name = layer_param.bottom(bottom_id);
-  if (available_blobs->find(blob_name) == available_blobs->end()) {
+  if (available_blobs->find(blob_name) == available_blobs->end()) {//如果发现这个bottom没有供应的top blob，报错
     LOG(FATAL) << "Unknown bottom blob '" << blob_name << "' (layer '"
                << layer_param.name() << "', bottom index " << bottom_id << ")";
   }
   const int blob_id = (*blob_name_to_idx)[blob_name];
   LOG_IF(INFO, Caffe::root_solver())
       << layer_names_[layer_id] << " <- " << blob_name;
+      
+  //记录一下该bottom对应的blob 指针，bottom_vecs_是重要变量，其记录着每层的得到的数据来自哪里，算出来的数据放到哪个blob，而该算出来的数据又作为另一个bottom的数据来源
   bottom_vecs_[layer_id].push_back(blobs_[blob_id].get());
-  bottom_id_vecs_[layer_id].push_back(blob_id);
-  available_blobs->erase(blob_name);
+  bottom_id_vecs_[layer_id].push_back(blob_id);//记录下该bottom对应的blob id
+  available_blobs->erase(blob_name);//该blob被认领了，去掉
   bool need_backward = blob_need_backward_[blob_id];
   // Check if the backpropagation on bottom_id should be skipped
-  if (layer_param.propagate_down_size() > 0) {
+  if (layer_param.propagate_down_size() > 0) {//如果定义了propagate_down参数，那就以定义要求为主
     need_backward = layer_param.propagate_down(bottom_id);
   }
   bottom_need_backward_[layer_id].push_back(need_backward);
@@ -521,13 +535,16 @@ Dtype Net<Dtype>::ForwardFromTo(int start, int end) {
   CHECK_LT(end, layers_.size());
   Dtype loss = 0;
   for (int i = start; i <= end; ++i) {
-    for (int c = 0; c < before_forward_.size(); ++c) {
+    for (int c = 0; c < before_forward_.size(); ++c) {//一些回调函数，before_forward
       before_forward_[c]->run(i);
     }
+    //重要函数，调用响应层的forward进行计算
+    //这里的top_vecs_[i]存放算出来的结果，由于在构建网络中保证了在一个bottom出现前，必定先有对应的top出现，
+    //因此网络按照protext中的顺序构建就能保证本层使用的bottom_vecs_数据是本次迭代中由其他层更新过的
     Dtype layer_loss = layers_[i]->Forward(bottom_vecs_[i], top_vecs_[i]);
     loss += layer_loss;
     if (debug_info_) { ForwardDebugInfo(i); }
-    for (int c = 0; c < after_forward_.size(); ++c) {
+    for (int c = 0; c < after_forward_.size(); ++c) {//一些回调函数，after_forward，没研究过
       after_forward_[c]->run(i);
     }
   }
@@ -545,7 +562,7 @@ Dtype Net<Dtype>::ForwardTo(int end) {
 }
 
 template <typename Dtype>
-const vector<Blob<Dtype>*>& Net<Dtype>::Forward(Dtype* loss) {
+const vector<Blob<Dtype>*>& Net<Dtype>::Forward(Dtype* loss) {//利用ForwardFromTo进行计算
   if (loss != NULL) {
     *loss = ForwardFromTo(0, layers_.size() - 1);
   } else {
@@ -567,19 +584,19 @@ const vector<Blob<Dtype>*>& Net<Dtype>::Forward(
 }
 
 template <typename Dtype>
-void Net<Dtype>::BackwardFromTo(int start, int end) {
+void Net<Dtype>::BackwardFromTo(int start, int end) {//bp过程
   CHECK_GE(end, 0);
   CHECK_LT(start, layers_.size());
-  for (int i = start; i >= end; --i) {
+  for (int i = start; i >= end; --i) {//一些回调函数before_backward_
     for (int c = 0; c < before_backward_.size(); ++c) {
       before_backward_[c]->run(i);
     }
-    if (layer_need_backward_[i]) {
+    if (layer_need_backward_[i]) {//这里多一个参数，bottom_need_backward_，其指明了哪个bottom需要进行bp的计算
       layers_[i]->Backward(
           top_vecs_[i], bottom_need_backward_[i], bottom_vecs_[i]);
       if (debug_info_) { BackwardDebugInfo(i); }
     }
-    for (int c = 0; c < after_backward_.size(); ++c) {
+    for (int c = 0; c < after_backward_.size(); ++c) {//一些回调函数after_backward_
       after_backward_[c]->run(i);
     }
   }
@@ -925,7 +942,7 @@ void Net<Dtype>::Update() {
 }
 
 template <typename Dtype>
-void Net<Dtype>::ClearParamDiffs() {
+void Net<Dtype>::ClearParamDiffs() {//清理上一回算出来的权重，清零
   for (int i = 0; i < learnable_params_.size(); ++i) {
     Blob<Dtype>* blob = learnable_params_[i];
     switch (Caffe::mode()) {

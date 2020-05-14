@@ -214,17 +214,17 @@ void Solver<Dtype>::Step(int iters) {
     // zero-init the params
     net_->ClearParamDiffs();
     if (param_.test_interval() && iter_ % param_.test_interval() == 0
-        && (iter_ > 0 || param_.test_initialization())) {
+        && (iter_ > 0 || param_.test_initialization())) {//测试一次
       if (Caffe::root_solver()) {
         TestAll();
       }
-      if (requested_early_exit_) {
+      if (requested_early_exit_) {//如果其他地方要求停止就停下来
         // Break out of the while loop because stop was requested while testing.
         break;
       }
     }
 
-    for (int i = 0; i < callbacks_.size(); ++i) {
+    for (int i = 0; i < callbacks_.size(); ++i) {//一些回调函数，应该可以在每次迭代开始做一些事，这里先不管
       callbacks_[i]->on_start();
     }
     const bool display = param_.display() && iter_ % param_.display() == 0;
@@ -232,12 +232,14 @@ void Solver<Dtype>::Step(int iters) {
     // accumulate the loss and gradient
     Dtype loss = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
+      //重要函数，这里进行训练中的前向和后向，这里可以用iter_size参数让主流程中，每次diff清零间隔中训练iter_size次，然后算一次loss或者其他的
       loss += net_->ForwardBackward();
     }
     loss /= param_.iter_size();
     // average the loss across iterations for smoothed reporting
+    //平滑下loss
     UpdateSmoothedLoss(loss, start_iter, average_loss);
-    if (display) {
+    if (display) {//如果能打印日志就输出本次迭代的结果
       float lapse = iteration_timer_.Seconds();
       float per_s = (iter_ - iterations_last_) / (lapse ? lapse : 1);
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
@@ -268,12 +270,12 @@ void Solver<Dtype>::Step(int iters) {
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
-    ApplyUpdate();
+    ApplyUpdate();//注意这里更新了权重,这里ApplyUpdate在基类Solver中是个虚函数，其由各个不同的梯度下降算法覆写，实现不同的梯度下降算法
 
     SolverAction::Enum request = GetRequestedAction();
 
     // Save a snapshot if needed.
-    if ((param_.snapshot()
+    if ((param_.snapshot()//该snapshot了？
          && iter_ % param_.snapshot() == 0
          && Caffe::root_solver()) ||
          (request == SolverAction::SNAPSHOT)) {

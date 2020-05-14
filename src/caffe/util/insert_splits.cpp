@@ -11,6 +11,11 @@ namespace caffe {
 
 void InsertSplits(const NetParameter& param, NetParameter* param_split) {
   // Initialize by copying from the input NetParameter.
+  //将一个top对应多个bottom的情况改为
+  //将该top与每个bottom中间连线上加一个split layer 也即
+  //top -> bottom1   top -> bottom2
+  //改为 top -> split1  -> bottom1   top -> split2 ->  bottom2
+  //想象一下链表插入节点
   param_split->CopyFrom(param);
   param_split->clear_layer();
   map<string, pair<int, int> > blob_name_to_last_top_idx;
@@ -35,11 +40,13 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
       ++top_idx_to_bottom_count[top_idx];//记录下该top对应的bottom数量
     }
     for (int j = 0; j < layer_param.top_size(); ++j) {
+      //由于对应的top和bottom的名字是相同的，这里将top名与top保存，这里需要理解一下。这样当要找一个bottom对应的top的时候就能找到这个同名的top
       const string& blob_name = layer_param.top(j);
       blob_name_to_last_top_idx[blob_name] = make_pair(i, j);
     }
     // A use of a top blob as a loss should be handled similarly to the use of
     // a top blob as a bottom blob to another layer.
+    //这里loss weight参数用的少，不是很理解这里将top对应到一个top的操作
     const int last_loss =
         std::min(layer_param.loss_weight_size(), layer_param.top_size());
     for (int j = 0; j < last_loss; ++j) {
@@ -54,10 +61,10 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
   //到这里主要完成了统计各个层的信息，将bottom与top对应，会有一个top对多个bottom的情况，这时一个top一个blob已经不好了，需要对应每个bottom添加blob
 
   for (int i = 0; i < param.layer_size(); ++i) {
-    LayerParameter* layer_param = param_split->add_layer();
+    LayerParameter* layer_param = param_split->add_layer();//先加入该层，后面根据需要insert其他层
     layer_param->CopyFrom(param.layer(i));
     // Replace any shared bottom blobs with split layer outputs.
-    for (int j = 0; j < layer_param->bottom_size(); ++j) {
+    for (int j = 0; j < layer_param->bottom_size(); ++j) {//先改该layer的bottom的名字
       const pair<int, int>& top_idx =
           bottom_idx_to_source_top_idx[make_pair(i, j)];
       const int split_count = top_idx_to_bottom_count[top_idx];
@@ -72,13 +79,13 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
     // Create split layer for any top blobs used by other layer as bottom
     // blobs more than once.
     //若一个top连多个bottom，就在其上加一层，layer.type为split，layer.bottom为该top，layer.top为该top对应的多个bottom
-    for (int j = 0; j < layer_param->top_size(); ++j) {
+    for (int j = 0; j < layer_param->top_size(); ++j) {//再改该layer的top的名字，注意与上面改的bottom的对应
       const pair<int, int>& top_idx = make_pair(i, j);
       const int split_count = top_idx_to_bottom_count[top_idx];
-      if (split_count > 1) {
+      if (split_count > 1) {//如果该top对应多个bottom
         const string& layer_name = layer_idx_to_layer_name[i];
         const string& blob_name = layer_param->top(j);
-        LayerParameter* split_layer_param = param_split->add_layer();
+        LayerParameter* split_layer_param = param_split->add_layer();//加一个split层
         const float loss_weight = top_idx_to_loss_weight[top_idx];
         ConfigureSplitLayer(layer_name, blob_name, j, split_count,
             loss_weight, split_layer_param);
@@ -95,10 +102,10 @@ void ConfigureSplitLayer(const string& layer_name, const string& blob_name,
     const int blob_idx, const int split_count, const float loss_weight,
     LayerParameter* split_layer_param) {
   split_layer_param->Clear();
-  split_layer_param->add_bottom(blob_name);
+  split_layer_param->add_bottom(blob_name);//加的split层的bottom是之前的top名
   split_layer_param->set_name(SplitLayerName(layer_name, blob_name, blob_idx));
   split_layer_param->set_type("Split");
-  for (int k = 0; k < split_count; ++k) {
+  for (int k = 0; k < split_count; ++k) {//依次加上top层，这些top层的名字要对应原来top对应的bottom层
     split_layer_param->add_top(
         SplitBlobName(layer_name, blob_name, blob_idx, k));
     if (loss_weight) {
