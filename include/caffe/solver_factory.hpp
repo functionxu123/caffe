@@ -70,6 +70,7 @@ class SolverRegistry {
   }
 
   // Get a solver using a SolverParameter.
+  //根据solver中的参数返回一个solver对象
   static Solver<Dtype>* CreateSolver(const SolverParameter& param) {
     const string& type = param.type();//SGD什么的
     CreatorRegistry& registry = Registry();
